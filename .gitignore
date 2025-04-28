@@ -1,0 +1,9 @@
+.vscode/launch.json
+.vscode/tasks.json
+.vs/szy/config/applicationhost.config
+.vs/szy/v17/.suo
+.vs/szy/v17/DocumentLayout.json
+/.vs
+/obj
+/bin/Debug/net8.0
+/Database

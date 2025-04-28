@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket 图片查看器</title>
+    <style>
+        body {
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            color: #2c3e50;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+        }
+
+        .connection-status {
+            margin: 20px 0;
+            padding: 10px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+
+        .status-connecting {
+            background-color: #f39c12;
+            color: white;
+        }
+
+        .status-connected {
+            background-color: #2ecc71;
+            color: white;
+        }
+
+        .status-disconnected {
+            background-color: #e74c3c;
+            color: white;
+        }
+
+        .panel {
+            margin-bottom: 20px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+        }
+
+        .panel-title {
+            margin-top: 0;
+            margin-bottom: 15px;
+            color: #2c3e50;
+        }
+
+        .image-container {
+            text-align: center;
+            padding: 20px;
+            background-color: #f9f9f9;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            min-height: 300px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .image-container img {
+            max-width: 100%;
+            max-height: 400px;
+            border: 1px solid #ddd;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+            display: none;
+        }
+
+        .log-container {
+            height: 150px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin-bottom: 10px;
+            background-color: #f9f9f9;
+            font-family: monospace;
+            font-size: 12px;
+        }
+
+        .log-entry {
+            padding: 4px 8px;
+            margin-bottom: 2px;
+            border-radius: 2px;
+        }
+
+        .log-info {
+            background-color: #d6eaf8;
+            border-left: 3px solid #3498db;
+        }
+
+        .log-success {
+            background-color: #d5f5e3;
+            border-left: 3px solid #2ecc71;
+        }
+
+        .log-error {
+            background-color: #fadbd8;
+            border-left: 3px solid #e74c3c;
+        }
+
+        .input-group {
+            display: flex;
+            margin-bottom: 10px;
+        }
+
+        .input-group input {
+            flex: 1;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: inherit;
+        }
+
+        .input-group button {
+            margin-left: 10px;
+            padding: 8px 15px;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .input-group button:hover {
+            background-color: #2980b9;
+        }
+
+        .input-group button:disabled {
+            background-color: #95a5a6;
+            cursor: not-allowed;
+        }
+
+        .settings-panel .input-group {
+            display: block;
+            margin-bottom: 15px;
+        }
+
+        .settings-panel .input-group label {
+            display: inline-block;
+            margin-left: 8px;
+            vertical-align: middle;
+            cursor: pointer;
+        }
+
+        .settings-panel .input-group input[type="checkbox"] {
+            width: auto;
+            vertical-align: middle;
+            margin: 0;
+            cursor: pointer;
+        }
+
+        .settings-panel .input-group input[type="number"] {
+            width: 80px;
+            margin-right: 10px;
+            padding: 6px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        .tabs {
+            display: flex;
+            border-bottom: 1px solid #ddd;
+            margin-bottom: 15px;
+        }
+
+        .tab {
+            padding: 10px 15px;
+            cursor: pointer;
+            border: 1px solid transparent;
+            border-bottom: none;
+            margin-bottom: -1px;
+        }
+
+        .tab.active {
+            border-color: #ddd;
+            border-radius: 4px 4px 0 0;
+            background-color: white;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .connection-info {
+            margin-top: 10px;
+            font-size: 0.9em;
+            color: #7f8c8d;
+        }
+
+        .image-counter {
+            text-align: center;
+            font-size: 18px;
+            margin-bottom: 10px;
+            color: #2c3e50;
+        }
+        
+        .button-group {
+            display: flex;
+            justify-content: center;
+            margin-top: 15px;
+            gap: 10px;
+        }
+        
+        .image-timestamp {
+            color: #7f8c8d;
+            font-size: 12px;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>WebSocket 图片查看器</h1>
+
+        <div class="connection-status status-disconnected" id="connectionStatus">
+            未连接
+        </div>
+
+        <div class="panel">
+            <h3 class="panel-title">连接设置</h3>
+            <div class="input-group">
+                <input type="text" id="wsUrl" value="" placeholder="WebSocket URL (例如: ws://localhost:5000/ws/image)">
+                <button id="connectBtn">连接</button>
+                <button id="disconnectBtn" disabled>断开</button>
+            </div>
+            <div class="connection-info" id="connectionInfo"></div>
+        </div>
+
+        <div class="tabs">
+            <div class="tab active" data-tab="image">图片显示</div>
+            <div class="tab" data-tab="logs">日志</div>
+            <div class="tab" data-tab="settings">设置</div>
+        </div>
+
+        <div class="tab-content active" id="imageTab">
+            <div class="image-counter" id="imageCounter">已接收图片: 0</div>
+            <div class="image-container" id="imageContainer">
+                <img id="displayImage" alt="接收到的图片将显示在这里">
+                <div class="image-timestamp" id="imageTimestamp"></div>
+            </div>
+        </div>
+
+        <div class="tab-content" id="logsTab">
+            <div class="log-container" id="logContainer"></div>
+        </div>
+
+        <div class="tab-content" id="settingsTab">
+            <div class="panel settings-panel">
+                <h3 class="panel-title">自动重连</h3>
+                <div class="input-group">
+                    <input type="checkbox" id="autoReconnect" checked>
+                    <label for="autoReconnect">断开连接后自动重连</label>
+                </div>
+                <div class="input-group">
+                    <input type="number" id="reconnectInterval" value="5000" min="1000" step="1000">
+                    <label for="reconnectInterval">重连间隔 (毫秒)</label>
+                </div>
+                <div class="input-group">
+                    <input type="checkbox" id="showImageTimestamp" checked>
+                    <label for="showImageTimestamp">显示图片接收时间戳</label>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // DOM 元素
+        const wsUrlInput = document.getElementById('wsUrl');
+        const connectBtn = document.getElementById('connectBtn');
+        const disconnectBtn = document.getElementById('disconnectBtn');
+        const connectionStatus = document.getElementById('connectionStatus');
+        const connectionInfo = document.getElementById('connectionInfo');
+        const logContainer = document.getElementById('logContainer');
+        const displayImage = document.getElementById('displayImage');
+        const imageContainer = document.getElementById('imageContainer');
+        const imageCounter = document.getElementById('imageCounter');
+        const imageTimestamp = document.getElementById('imageTimestamp');
+        const autoReconnectCheckbox = document.getElementById('autoReconnect');
+        const reconnectIntervalInput = document.getElementById('reconnectInterval');
+        const showImageTimestampCheckbox = document.getElementById('showImageTimestamp');
+        const tabs = document.querySelectorAll('.tab');
+        const tabContents = document.querySelectorAll('.tab-content');
+
+        // 状态变量
+        let socket = null;
+        let reconnectTimeout = null;
+        let connectionStartTime = null;
+        let imageCount = 0;
+        let connectionId = null;
+        let isSubscribed = false;
+
+        // 初始化
+        function init() {
+            // 设置默认 WebSocket URL
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const host = window.location.host;
+            wsUrlInput.value = `${protocol}//${host}/ws/image`;
+
+            // 绑定事件
+            connectBtn.addEventListener('click', connect);
+            disconnectBtn.addEventListener('click', disconnect);
+
+            // 标签页切换
+            tabs.forEach(tab => {
+                tab.addEventListener('click', function () {
+                    const tabId = this.getAttribute('data-tab');
+
+                    // 激活标签
+                    tabs.forEach(t => t.classList.remove('active'));
+                    this.classList.add('active');
+
+                    // 显示对应内容
+                    tabContents.forEach(content => {
+                        content.classList.remove('active');
+                        if (content.id === `${tabId}Tab`) {
+                            content.classList.add('active');
+                        }
+                    });
+                });
+            });
+        }
+
+        // 连接 WebSocket
+        function connect() {
+            const url = wsUrlInput.value.trim();
+            if (!url) {
+                addLog('请输入有效的 WebSocket URL', 'error');
+                return;
+            }
+
+            try {
+                // 断开现有连接
+                if (socket) {
+                    socket.close();
+                }
+
+                // 更新 UI
+                updateConnectionStatus('connecting');
+                addLog(`正在连接到 ${url}...`, 'info');
+
+                // 创建新连接
+                socket = new WebSocket(url);
+                connectionStartTime = new Date();
+
+                // 连接打开
+                socket.onopen = function (event) {
+                    updateConnectionStatus('connected');
+                    addLog('连接已建立', 'success');
+                    
+                    // 自动订阅图片推送
+                    subscribeToImageStream();
+                };
+
+                // 接收消息
+                socket.onmessage = function (event) {
+                    try {
+                        const data = event.data;
+                        
+                        // 尝试解析为JSON
+                        try {
+                            const jsonData = JSON.parse(data);
+                            
+                            if (jsonData.type === 'connection' && jsonData.id) {
+                                connectionId = jsonData.id;
+                                updateConnectionInfo();
+                                addLog(`已获取连接ID: ${connectionId}`, 'info');
+                            }
+                            else if (jsonData.type === 'subscription') {
+                                addLog(`订阅状态: ${jsonData.status} 主题: ${jsonData.topic}`, 'info');
+                                if (jsonData.status === 'subscribed' && jsonData.topic === 'image') {
+                                    isSubscribed = true;
+                                    updateConnectionInfo();
+                                }
+                            }
+                            else if (jsonData.type === 'image') {
+                                if (jsonData.data) {
+                                    displayBase64Image(jsonData.data, new Date(parseInt(jsonData.timestamp)));
+                                    addLog('已接收新图片', 'success');
+                                }
+                            }
+                            else if (jsonData.image || jsonData.imageData || jsonData.base64) {
+                                const imageData = jsonData.image || jsonData.imageData || jsonData.base64;
+                                if (isBase64Image(imageData)) {
+                                    displayBase64Image(imageData);
+                                    addLog('已接收JSON中的图片数据', 'success');
+                                }
+                            }
+                            else {
+                                addLog(`接收到消息: ${JSON.stringify(jsonData)}`, 'info');
+                            }
+                        } catch (e) {
+                            // 非JSON数据，判断是否为Base64图片数据
+                            if (typeof data === 'string' && (data.startsWith('data:image') || isBase64Image(data))) {
+                                displayBase64Image(data);
+                                addLog('已接收新图片', 'success');
+                            } else {
+                                // 非JSON数据，记录为普通消息
+                                addLog(`接收到非图片数据: ${data.substring(0, 100)}${data.length > 100 ? '...' : ''}`, 'info');
+                            }
+                        }
+                    } catch (error) {
+                        addLog(`处理消息错误: ${error.message}`, 'error');
+                    }
+                };
+
+                // 连接关闭
+                socket.onclose = function (event) {
+                    // 更新 UI
+                    updateConnectionStatus('disconnected');
+                    isSubscribed = false;
+
+                    // 添加日志
+                    if (event.wasClean) {
+                        addLog(`连接已关闭: 代码=${event.code} 原因=${event.reason || '无'}`, 'info');
+                    } else {
+                        addLog('连接意外断开', 'error');
+                    }
+
+                    // 自动重连
+                    if (autoReconnectCheckbox.checked) {
+                        const interval = parseInt(reconnectIntervalInput.value) || 5000;
+                        addLog(`将在 ${interval / 1000} 秒后尝试重新连接...`, 'info');
+
+                        clearTimeout(reconnectTimeout);
+                        reconnectTimeout = setTimeout(connect, interval);
+                    }
+                };
+
+                // 连接错误
+                socket.onerror = function (error) {
+                    addLog('连接错误', 'error');
+                    console.error('WebSocket 错误:', error);
+                };
+
+            } catch (error) {
+                addLog(`连接失败: ${error.message}`, 'error');
+                updateConnectionStatus('disconnected');
+            }
+        }
+
+        // 断开连接
+        function disconnect() {
+            if (socket) {
+                socket.close(1000, '用户主动断开连接');
+            }
+            clearTimeout(reconnectTimeout);
+        }
+        
+        // 订阅图片流
+        function subscribeToImageStream() {
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                const message = JSON.stringify({
+                    subscribe: "image"
+                });
+                socket.send(message);
+                addLog('已自动订阅图片推送', 'info');
+            } else {
+                addLog('WebSocket未连接，无法订阅', 'error');
+            }
+        }
+
+        // 显示Base64图片
+        function displayBase64Image(base64Data, timestamp) {
+            // 确保数据是完整的Base64图片数据
+            let imageData = base64Data;
+            if (!base64Data.startsWith('data:image')) {
+                imageData = `data:image/jpeg;base64,${base64Data.replace(/^(data:image\/[^;]+;base64,|base64,)/, '')}`;
+            }
+
+            // 更新图片
+            displayImage.src = imageData;
+            displayImage.style.display = 'block';
+            
+            // 更新计数
+            imageCount++;
+            imageCounter.textContent = `已接收图片: ${imageCount}`;
+            
+            // 显示时间戳
+            if (showImageTimestampCheckbox.checked) {
+                if (timestamp) {
+                    imageTimestamp.textContent = `接收时间: ${timestamp.toLocaleString()}`;
+                } else {
+                    imageTimestamp.textContent = `接收时间: ${new Date().toLocaleString()}`;
+                }
+            } else {
+                imageTimestamp.textContent = '';
+            }
+        }
+
+        // 判断是否为Base64图片
+        function isBase64Image(str) {
+            if (!str) return false;
+            
+            // 检查是否为带格式的Base64
+            if (str.startsWith('data:image')) {
+                return true;
+            }
+            
+            // 检查是否为纯Base64编码
+            try {
+                // Base64编码的图片通常很长，并且只包含Base64字符
+                const isLong = str.length > 100;
+                const isBase64Format = /^[A-Za-z0-9+/=]+$/.test(str);
+                return isLong && isBase64Format;
+            } catch (e) {
+                return false;
+            }
+        }
+
+        // 添加日志
+        function addLog(message, type) {
+            const logEntry = document.createElement('div');
+            logEntry.className = `log-entry log-${type}`;
+            
+            const timestamp = new Date().toLocaleTimeString();
+            logEntry.textContent = `[${timestamp}] ${message}`;
+            
+            logContainer.appendChild(logEntry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+
+        // 更新连接状态
+        function updateConnectionStatus(status) {
+            connectionStatus.className = 'connection-status';
+
+            switch (status) {
+                case 'connecting':
+                    connectionStatus.classList.add('status-connecting');
+                    connectionStatus.textContent = '正在连接...';
+                    connectBtn.disabled = true;
+                    disconnectBtn.disabled = false;
+                    break;
+
+                case 'connected':
+                    connectionStatus.classList.add('status-connected');
+                    connectionStatus.textContent = '已连接';
+                    connectBtn.disabled = true;
+                    disconnectBtn.disabled = false;
+                    updateConnectionInfo();
+                    break;
+
+                case 'disconnected':
+                    connectionStatus.classList.add('status-disconnected');
+                    connectionStatus.textContent = '未连接';
+                    connectBtn.disabled = false;
+                    disconnectBtn.disabled = true;
+                    connectionId = null;
+                    updateConnectionInfo();
+                    break;
+            }
+        }
+
+        // 更新连接信息
+        function updateConnectionInfo() {
+            if (socket && socket.readyState === WebSocket.OPEN && connectionStartTime) {
+                const duration = Math.floor((new Date() - connectionStartTime) / 1000);
+                const minutes = Math.floor(duration / 60);
+                const seconds = duration % 60;
+
+                let info = `已连接 ${minutes}分${seconds}秒`;
+                if (connectionId) {
+                    info += ` | 连接ID: ${connectionId}`;
+                }
+                if (isSubscribed) {
+                    info += ' | 已订阅图片推送';
+                }
+
+                connectionInfo.textContent = info;
+
+                // 每秒更新一次
+                setTimeout(updateConnectionInfo, 1000);
+            } else {
+                connectionInfo.textContent = '';
+            }
+        }
+
+        // 初始化
+        init();
+    </script>
+</body>
+</html> 

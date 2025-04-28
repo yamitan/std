@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket 测试工具</title>
+    <style>
+        body {
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            color: #2c3e50;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+        }
+
+        .connection-status {
+            margin: 20px 0;
+            padding: 10px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+
+        .status-connecting {
+            background-color: #f39c12;
+            color: white;
+        }
+
+        .status-connected {
+            background-color: #2ecc71;
+            color: white;
+        }
+
+        .status-disconnected {
+            background-color: #e74c3c;
+            color: white;
+        }
+
+        .panel {
+            margin-bottom: 20px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+        }
+
+        .panel-title {
+            margin-top: 0;
+            margin-bottom: 15px;
+            color: #2c3e50;
+        }
+
+        .message-container {
+            height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin-bottom: 10px;
+            background-color: #f9f9f9;
+        }
+
+        .message {
+            padding: 8px;
+            margin-bottom: 5px;
+            border-radius: 4px;
+        }
+
+        .message-received {
+            background-color: #d5f5e3;
+            border-left: 4px solid #2ecc71;
+        }
+
+        .message-sent {
+            background-color: #d6eaf8;
+            border-left: 4px solid #3498db;
+        }
+
+        .message-system {
+            background-color: #fadbd8;
+            border-left: 4px solid #e74c3c;
+        }
+
+        .message-time {
+            font-size: 0.8em;
+            color: #7f8c8d;
+            margin-bottom: 3px;
+        }
+
+        .message-content {
+            word-break: break-all;
+        }
+
+        .input-group {
+            display: flex;
+            margin-bottom: 10px;
+        }
+
+            .input-group input, .input-group textarea {
+                flex: 1;
+                padding: 8px;
+                border: 1px solid #ddd;
+                border-radius: 4px;
+                font-family: inherit;
+            }
+
+            .input-group button {
+                margin-left: 10px;
+                padding: 8px 15px;
+                background-color: #3498db;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+            }
+
+                .input-group button:hover {
+                    background-color: #2980b9;
+                }
+
+                .input-group button:disabled {
+                    background-color: #95a5a6;
+                    cursor: not-allowed;
+                }
+
+        .connection-info {
+            margin-top: 10px;
+            font-size: 0.9em;
+            color: #7f8c8d;
+        }
+
+        .tabs {
+            display: flex;
+            border-bottom: 1px solid #ddd;
+            margin-bottom: 15px;
+        }
+
+        .tab {
+            padding: 10px 15px;
+            cursor: pointer;
+            border: 1px solid transparent;
+            border-bottom: none;
+            margin-bottom: -1px;
+        }
+
+            .tab.active {
+                border-color: #ddd;
+                border-radius: 4px 4px 0 0;
+                background-color: white;
+            }
+
+        .tab-content {
+            display: none;
+        }
+
+            .tab-content.active {
+                display: block;
+            }
+
+        /* 新增设置面板专用样式 */
+        .settings-panel .input-group {
+            display: block;
+            margin-bottom: 15px;
+        }
+
+            .settings-panel .input-group label {
+                display: inline-block;
+                margin-left: 8px;
+                vertical-align: middle;
+                cursor: pointer;
+            }
+
+            .settings-panel .input-group input[type="checkbox"] {
+                width: auto;
+                vertical-align: middle;
+                margin: 0;
+                cursor: pointer;
+            }
+
+            .settings-panel .input-group input[type="number"] {
+                width: 80px;
+                margin-right: 10px;
+                padding: 6px;
+                border: 1px solid #ddd;
+                border-radius: 4px;
+            }
+
+        @media (max-width: 600px) {
+            .settings-panel .input-group input[type="number"] {
+                width: 100%;
+                margin-bottom: 8px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>WebSocket 测试工具</h1>
+
+        <div class="connection-status status-disconnected" id="connectionStatus">
+            未连接
+        </div>
+
+        <div class="panel">
+            <h3 class="panel-title">连接设置</h3>
+            <div class="input-group">
+                <input type="text" id="wsUrl" value="" placeholder="WebSocket URL (例如: ws://localhost:5000/ws)">
+                <button id="connectBtn">连接</button>
+                <button id="disconnectBtn" disabled>断开</button>
+            </div>
+            <div class="connection-info" id="connectionInfo"></div>
+        </div>
+
+        <div class="tabs">
+            <div class="tab active" data-tab="messages">消息</div>
+            <div class="tab" data-tab="settings">设置</div>
+        </div>
+
+        <div class="tab-content active" id="messagesTab">
+            <div class="panel">
+                <h3 class="panel-title">消息记录</h3>
+                <div class="message-container" id="messageContainer"></div>
+
+                <div class="input-group">
+                    <textarea id="messageInput" placeholder="输入要发送的消息..." rows="3" disabled></textarea>
+                    <button id="sendBtn" disabled>发送</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-content" id="settingsTab">
+            <div class="panel settings-panel">
+                <h3 class="panel-title">自动重连</h3>
+                <div class="input-group">
+                    <input type="checkbox" id="autoReconnect" checked>
+                    <label for="autoReconnect">断开连接后自动重连</label>
+                </div>
+                <div class="input-group">
+                    <input type="number" id="reconnectInterval" value="5000" min="1000" step="1000">
+                    <label for="reconnectInterval">重连间隔 (毫秒)</label>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // DOM 元素
+        const wsUrlInput = document.getElementById('wsUrl');
+        const connectBtn = document.getElementById('connectBtn');
+        const disconnectBtn = document.getElementById('disconnectBtn');
+        const connectionStatus = document.getElementById('connectionStatus');
+        const connectionInfo = document.getElementById('connectionInfo');
+        const messageContainer = document.getElementById('messageContainer');
+        const messageInput = document.getElementById('messageInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const autoReconnectCheckbox = document.getElementById('autoReconnect');
+        const reconnectIntervalInput = document.getElementById('reconnectInterval');
+        const tabs = document.querySelectorAll('.tab');
+        const tabContents = document.querySelectorAll('.tab-content');
+
+        // WebSocket 变量
+        let socket = null;
+        let reconnectTimeout = null;
+        let connectionStartTime = null;
+        let connectionId = null;
+
+        // 初始化
+        function init() {
+            // 设置默认 WebSocket URL
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const host = window.location.host;
+            wsUrlInput.value = `${protocol}//${host}/ws`;
+
+            // 绑定事件
+            connectBtn.addEventListener('click', connect);
+            disconnectBtn.addEventListener('click', disconnect);
+            sendBtn.addEventListener('click', sendMessage);
+            messageInput.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage();
+                }
+            });
+
+            // 标签页切换
+            tabs.forEach(tab => {
+                tab.addEventListener('click', function () {
+                    const tabId = this.getAttribute('data-tab');
+
+                    // 激活标签
+                    tabs.forEach(t => t.classList.remove('active'));
+                    this.classList.add('active');
+
+                    // 显示对应内容
+                    tabContents.forEach(content => {
+                        content.classList.remove('active');
+                        if (content.id === `${tabId}Tab`) {
+                            content.classList.add('active');
+                        }
+                    });
+                });
+            });
+        }
+
+        // 连接 WebSocket
+        function connect() {
+            const url = wsUrlInput.value.trim();
+            if (!url) {
+                addSystemMessage('请输入有效的 WebSocket URL');
+                return;
+            }
+
+            try {
+                // 断开现有连接
+                if (socket) {
+                    socket.close();
+                }
+
+                // 更新 UI
+                updateConnectionStatus('connecting');
+                addSystemMessage(`正在连接到 ${url}...`);
+
+                // 创建新连接
+                socket = new WebSocket(url);
+                connectionStartTime = new Date();
+
+                // 连接打开
+                socket.onopen = function (event) {
+                    updateConnectionStatus('connected');
+                    addSystemMessage('连接已建立');
+
+                    // 启用消息输入
+                    messageInput.disabled = false;
+                    sendBtn.disabled = false;
+                };
+
+                // 接收消息
+                socket.onmessage = function (event) {
+                    const message = event.data;
+                    addReceivedMessage(message);
+
+                    // 尝试解析连接 ID
+                    if (message.includes('WebSocket连接已添加，ID:')) {
+                        const match = message.match(/ID: ([a-zA-Z0-9-]+)/);
+                        if (match && match[1]) {
+                            connectionId = match[1];
+                            updateConnectionInfo();
+                        }
+                    }
+                };
+
+                // 连接关闭
+                socket.onclose = function (event) {
+                    const wasConnected = messageInput.disabled === false;
+
+                    // 更新 UI
+                    updateConnectionStatus('disconnected');
+                    messageInput.disabled = true;
+                    sendBtn.disabled = true;
+
+                    // 添加消息
+                    if (event.wasClean) {
+                        addSystemMessage(`连接已关闭: 代码=${event.code} 原因=${event.reason || '无'}`);
+                    } else {
+                        addSystemMessage('连接意外断开');
+                    }
+
+                    // 自动重连
+                    if (wasConnected && autoReconnectCheckbox.checked) {
+                        const interval = parseInt(reconnectIntervalInput.value) || 5000;
+                        addSystemMessage(`将在 ${interval / 1000} 秒后尝试重新连接...`);
+
+                        clearTimeout(reconnectTimeout);
+                        reconnectTimeout = setTimeout(connect, interval);
+                    }
+                };
+
+                // 连接错误
+                socket.onerror = function (error) {
+                    addSystemMessage('连接错误');
+                    console.error('WebSocket 错误:', error);
+                };
+
+            } catch (error) {
+                addSystemMessage(`连接失败: ${error.message}`);
+                updateConnectionStatus('disconnected');
+            }
+        }
+
+        // 断开连接
+        function disconnect() {
+            if (socket) {
+                socket.close(1000, '用户主动断开连接');
+            }
+            clearTimeout(reconnectTimeout);
+        }
+
+        // 发送消息
+        function sendMessage() {
+            if (!socket || socket.readyState !== WebSocket.OPEN) {
+                addSystemMessage('未连接到服务器，无法发送消息');
+                return;
+            }
+
+            const message = messageInput.value.trim();
+            if (!message) return;
+
+            try {
+                socket.send(message);
+                addSentMessage(message);
+                messageInput.value = '';
+            } catch (error) {
+                addSystemMessage(`发送失败: ${error.message}`);
+            }
+        }
+
+        // 添加接收到的消息
+        function addReceivedMessage(message) {
+            const messageElement = createMessageElement(message, 'received');
+            messageContainer.appendChild(messageElement);
+            scrollToBottom();
+        }
+
+        // 添加发送的消息
+        function addSentMessage(message) {
+            const messageElement = createMessageElement(message, 'sent');
+            messageContainer.appendChild(messageElement);
+            scrollToBottom();
+        }
+
+        // 添加系统消息
+        function addSystemMessage(message) {
+            // 判断消息内容，为不同类型的连接消息使用不同样式
+            let messageType = 'system';
+            if (message === '连接已建立') {
+                messageType = 'received'; // 成功连接使用绿色
+            } else if (message.includes('正在连接')) {
+                messageType = 'sent'; // 正在连接使用蓝色
+            } else if (message.includes('连接失败') || message.includes('连接错误') || message.includes('连接意外断开')) {
+                messageType = 'system'; // 连接失败相关消息使用红色
+            }
+            const messageElement = createMessageElement(message, messageType);
+            messageContainer.appendChild(messageElement);
+            scrollToBottom();
+        }
+
+        // 创建消息元素
+        function createMessageElement(message, type) {
+            const messageElement = document.createElement('div');
+            messageElement.className = `message message-${type}`;
+
+            const timeElement = document.createElement('div');
+            timeElement.className = 'message-time';
+            timeElement.textContent = new Date().toLocaleTimeString();
+
+            const contentElement = document.createElement('div');
+            contentElement.className = 'message-content';
+            contentElement.textContent = message;
+
+            messageElement.appendChild(timeElement);
+            messageElement.appendChild(contentElement);
+
+            return messageElement;
+        }
+
+        // 滚动到底部
+        function scrollToBottom() {
+            messageContainer.scrollTop = messageContainer.scrollHeight;
+        }
+
+        // 更新连接状态
+        function updateConnectionStatus(status) {
+            connectionStatus.className = 'connection-status';
+
+            switch (status) {
+                case 'connecting':
+                    connectionStatus.classList.add('status-connecting');
+                    connectionStatus.textContent = '正在连接...';
+                    connectBtn.disabled = true;
+                    disconnectBtn.disabled = false;
+                    break;
+
+                case 'connected':
+                    connectionStatus.classList.add('status-connected');
+                    connectionStatus.textContent = '已连接';
+                    connectBtn.disabled = true;
+                    disconnectBtn.disabled = false;
+                    updateConnectionInfo();
+                    break;
+
+                case 'disconnected':
+                    connectionStatus.classList.add('status-disconnected');
+                    connectionStatus.textContent = '未连接';
+                    connectBtn.disabled = false;
+                    disconnectBtn.disabled = true;
+                    connectionId = null;
+                    updateConnectionInfo();
+                    break;
+            }
+        }
+
+        // 更新连接信息
+        function updateConnectionInfo() {
+            if (socket && socket.readyState === WebSocket.OPEN && connectionStartTime) {
+                const duration = Math.floor((new Date() - connectionStartTime) / 1000);
+                const minutes = Math.floor(duration / 60);
+                const seconds = duration % 60;
+
+                let info = `已连接 ${minutes}分${seconds}秒`;
+                if (connectionId) {
+                    info += ` | 连接ID: ${connectionId}`;
+                }
+
+                connectionInfo.textContent = info;
+
+                // 每秒更新一次
+                setTimeout(updateConnectionInfo, 1000);
+            } else {
+                connectionInfo.textContent = '';
+            }
+        }
+
+        // 初始化
+        init();
+    </script>
+</body>
+</html>

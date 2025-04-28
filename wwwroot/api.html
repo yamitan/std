@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>JWT API演示</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+        line-height: 1.6;
+      }
+      .container {
+        background-color: #f5f5f5;
+        padding: 20px;
+        border-radius: 8px;
+        margin-top: 20px;
+      }
+      button {
+        background-color: #4caf50;
+        color: white;
+        padding: 10px 15px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        margin-right: 10px;
+      }
+      button:hover {
+        background-color: #45a049;
+      }
+      pre {
+        background-color: #282c34;
+        color: #abb2bf;
+        padding: 15px;
+        border-radius: 5px;
+        overflow-x: auto;
+      }
+      .input-group {
+        margin-bottom: 15px;
+      }
+      label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: bold;
+      }
+      input,
+      textarea {
+        width: 100%;
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        box-sizing: border-box;
+      }
+      .result {
+        margin-top: 20px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>JWT API演示</h1>
+
+    <div class="container">
+      <h2>1. 登录获取Token</h2>
+      <div class="input-group">
+        <label for="username">用户名:</label>
+        <input type="text" id="username" value="wzh" />
+      </div>
+      <div class="input-group">
+        <label for="password">密码:</label>
+        <input type="password" id="password" value="12345678" />
+      </div>
+      <button onclick="login()">登录</button>
+
+      <div class="result" id="loginResult"></div>
+    </div>
+
+    <div class="container">
+      <h2>2. 访问API</h2>
+      <div class="input-group">
+        <label for="apiUrl">选择API:</label>
+        <select id="apiEndpoint" onchange="updateApiUrl()">
+          <option value="/api/user/public">公开API - 无需认证</option>
+          <option value="/api/user/profile">用户信息 - 需要认证</option>
+          <option value="/api/system/info">系统信息</option>
+          <option value="/api/system/health">系统健康状态</option>
+        </select>
+      </div>
+      <div class="input-group">
+        <label for="apiUrl">API地址:</label>
+        <input type="text" id="apiUrl" readonly />
+      </div>
+      <button onclick="sendRequest('GET')">发送GET请求</button>
+
+      <div class="result">
+        <h3>请求头信息:</h3>
+        <pre id="requestHeaders"></pre>
+
+        <h3>响应结果:</h3>
+        <pre id="responseResult"></pre>
+      </div>
+    </div>
+
+    <script>
+      // 存储token
+      let authToken = "";
+      // 基础URL - 根据实际情况调整
+      const baseUrl = window.location.origin;
+      
+      // 页面加载时初始化API URL
+      document.addEventListener('DOMContentLoaded', function() {
+        updateApiUrl();
+      });
+      
+      // 更新API URL
+      function updateApiUrl() {
+        const endpoint = document.getElementById("apiEndpoint").value;
+        document.getElementById("apiUrl").value = baseUrl + endpoint;
+      }
+
+      // 登录获取JWT Token
+      async function login() {
+        const username = document.getElementById("username").value;
+        const password = document.getElementById("password").value;
+        const loginUrl = baseUrl + "/api/auth/login";
+        
+        try {
+          document.getElementById("loginResult").innerHTML = `<p>正在登录...</p>`;
+          
+          // 使用POST请求体传递UsersReq对象
+          const response = await fetch(loginUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              username: username,
+              password: password
+            })
+          });
+          
+          const result = await response.json();
+          
+          if (result.success) {
+            authToken = result.data.token;
+            document.getElementById("loginResult").innerHTML = `
+              <p style="color: green;">登录成功!</p>
+              <pre>获取到Token: ${authToken}</pre>
+            `;
+          } else {
+            document.getElementById("loginResult").innerHTML = `
+              <p style="color: red;">登录失败: ${result.message}</p>
+            `;
+          }
+        } catch (error) {
+          document.getElementById("loginResult").innerHTML = `
+            <p style="color: red;">登录失败: ${error.message}</p>
+          `;
+        }
+      }
+
+      // 发送请求
+      async function sendRequest(method) {
+        const apiUrl = document.getElementById("apiUrl").value;
+        const endpoint = document.getElementById("apiEndpoint").value;
+        const needsAuth = endpoint !== "/api/user/public";
+        
+        if (needsAuth && !authToken) {
+          alert("此API需要认证，请先登录获取Token!");
+          return;
+        }
+
+        try {
+          // 准备请求头
+          const headers = {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          };
+          
+          // 如果需要认证，添加Authorization头
+          if (needsAuth && authToken) {
+            headers['Authorization'] = `Bearer ${authToken}`;
+          }
+
+          // 显示请求头信息
+          document.getElementById("requestHeaders").textContent = 
+            JSON.stringify(headers, null, 2);
+
+          // 发送请求
+          const options = {
+            method: method,
+            headers: headers
+          };
+
+          const response = await fetch(apiUrl, options);
+          const result = await response.json();
+
+          // 显示响应结果
+          document.getElementById("responseResult").textContent = 
+            JSON.stringify(result, null, 2);
+        } catch (error) {
+          document.getElementById("responseResult").textContent = `请求出错: ${error.message}`;
+        }
+      }
+    </script>
+  </body>
+</html>
